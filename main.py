@@ -1,18 +1,28 @@
 from fastmcp import FastMCP
 from pydantic import BaseModel
-from typing import Literal
-import uvicorn
+from fastapi import HTTPException, status
+from auth import sign_in, get_current_user
+from fastmcp.server.dependencies import get_http_headers
 
-app = FastMCP("Mi Catálogo de Herramientas Avanzado")
-
+app = FastMCP("MCP Seguro")
 
 class UserProfile(BaseModel):
-    """Representa un perfil de usuario estructurado."""
     user_id: str
     username: str
     email: str
     is_active: bool
 
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+@app.tool
+async def iniciar_sesion(email: str, password: str) -> Token:
+    """Inicia sesión y devuelve un token de acceso."""
+    token_str = await sign_in(email, password)
+    return Token(access_token=token_str, token_type="bearer")
 
 @app.tool
 def buscar_noticias(query: str, limit: int = 10):
@@ -26,14 +36,27 @@ def buscar_noticias(query: str, limit: int = 10):
     return [f"Noticia {i+1} sobre {query}" for i in range(limit)]
 
 @app.tool
-def obtener_perfil_usuario(user_id: str) -> UserProfile:
-    """Obtiene el perfil de un usuario basado en su ID."""
-    print(f"Obteniendo perfil para el usuario '{user_id}'...")
+async def obtener_perfil_usuario() -> UserProfile:
+    """Obtiene el perfil del usuario autenticado leyendo el token del header."""
+    auth_header = get_http_headers().get("authorization")
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Falta el header Authorization con el token Bearer",
+        )
+
+    token = auth_header.split(" ")[1]
+    current_user = await get_current_user(token)
+
+    user_id = current_user.get("sub")
+    email = current_user.get("email", f"{user_id}@example.com")
+
     return UserProfile(
         user_id=user_id,
-        username=f"user_{user_id}",
-        email=f"{user_id}@example.com",
-        is_active=True
+        username=f"user_{user_id[:6]}",
+        email=email,
+        is_active=True,
     )
 
 @app.tool
@@ -46,5 +69,4 @@ def dividir(a: float, b: float) -> float:
 
 
 if __name__ == "__main__":
-    app.run()
-
+    app.run(transport="http", host="127.0.0.1", port=8000)
