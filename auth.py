@@ -6,7 +6,7 @@ import requests
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-JWKS_URL = "https://cilduzxagslwmgqydwik.supabase.co/auth/v1/.well-known/jwks.json"
+JWKS_URL = ""
 
 def get_jwk_for_kid(kid: str):
     jwks = requests.get(JWKS_URL).json()
@@ -43,7 +43,7 @@ async def get_current_user(token: str):
             jwk,
             algorithms=[header["alg"]],
             audience="authenticated",
-            issuer="https://cilduzxagslwmgqydwik.supabase.co/auth/v1"
+            issuer=""
         )
         user_id = payload.get("sub")
         if not user_id:
